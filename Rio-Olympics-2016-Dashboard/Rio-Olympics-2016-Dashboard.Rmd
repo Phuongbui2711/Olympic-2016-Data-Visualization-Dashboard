@@ -1,0 +1,911 @@
+---
+title: "Rio 2016 Olympics"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: scroll
+    theme: 
+      version: 4
+      bootswatch: minty
+runtime: shiny
+resource_files:
+- Rio-de-Janeiro-Olympic-Games-2016.webp
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(packcircles)
+library(countrycode)
+library(ggiraph)
+library(plotly)
+library(lubridate)
+library(eeptools)
+library(maps)
+library(mapproj)
+library(DT)
+
+library(echarts4r.assets)
+library(echarts4r)
+
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
+library(tm)
+
+dat <- read_csv("Olympics_2016_Rio_Athletes.csv")
+
+dat <- dat %>%
+  mutate(country = case_when(
+    nationality == 'IOA' ~ 'Independent Olympians',
+    nationality == 'ISV' ~ 'United States Virgin Islands',
+    nationality == 'LIB' ~ 'Lebanon',
+    nationality == 'ROT' ~ 'Refugee Olympic Team',
+    nationality == 'SIN' ~ 'Singapore',
+    nationality >0 ~ countrycode(nationality, "ioc", "country.name"))) %>%
+  mutate(continent = case_when(
+    nationality == 'IOA' ~ 'Independent',
+    nationality == 'ISV' ~ 'Americas',
+    nationality == 'LIB' ~ 'Asia',
+    nationality == 'ROT' ~ 'Independent',
+    nationality == 'SIN' ~ 'Asia',
+    nationality == 'KOS' ~ 'Europe',
+    nationality >0 ~ countrycode(nationality, "ioc", "continent"))) %>%
+  mutate(continent_id = case_when(
+    continent == 'Americas' ~ 1,
+    continent == 'Europe' ~ 2,
+    continent == 'Asia' ~ 3,
+    continent == 'Africa' ~ 4,
+    continent == 'Oceania' ~ 5,
+    continent ==  'Independent' ~ 6)) %>%
+  mutate(total = gold + silver + bronze) %>%
+  mutate(dob = mdy(dob))
+
+cent <- function(x, year=1940){
+  m <- year(x) %% 100
+  year(x) <- ifelse(m > year %% 100, 1900+m, 2000+m)
+  x
+}
+
+dob2 = as.tibble(cent(dat$dob)) %>%
+  rename("dob2"="value")
+
+dat <- add_column(dat, as.vector(dob2)) %>%
+  mutate(age = floor(interval(start=dob,
+                              end=ymd("2016-08-05")) / 
+                       duration(n=1, unit="years")))
+
+```
+
+Introduction {data-orientation=rows}
+======================================
+
+### 2016 Rio de Janeiro Olympic Games animated medals race
+
+<style>
+.shiny-app-frame {
+  position: fixed;
+  left: 0;
+  top: 50px;
+  bottom: 0;
+  right: 0;
+}
+.shiny-app-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+</style>
+
+<div class="shiny-app-frame"> 
+  <iframe src='https://flo.uri.sh/visualisation/15922977/embed' title='Interactive or visual content' class='flourish-embed-iframe' frameborder='0' scrolling='no' style='width:100%; height:600px;' sandbox='allow-same-origin allow-forms allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation'>
+  </iframe>
+  <div style='width:100%!;margin-top:4px!important;text-align:right!important;'>
+    <a class='flourish-credit'
+    href='https://public.flourish.studio/visualisation/15922977/?utm_source=embed&utm_campaign=visualisation/15922977' target='_top' style='text-decoration:none!important'>
+    </a>
+  </div>
+</div>
+
+Row {}
+-----------------------------------------------------------------------
+
+### Contents
+
+#### **The Athletes** explores the range of athletes that competed in the Rio 2016 Olympic Games, including global distribution, gender, continents and countries. For global distribution, click and drag the map to zoom in on the region, and double-click to reset
+
+<br>
+
+#### **The Medalists** explores the medals and medalists of the Games. Configure the medals, nationality & sport input parameters on the sidebar to filter the underlying data
+
+<br>
+
+#### **The Attributes** explores the attributes of medalists. What are observed common attributes of Olympic medalists? Configure sport & sex input parameters on the sidebar to filter the underlying data
+
+### Logo
+
+#### **Medals and Sport** shows a table of medal totals and two charts, one chart is the word cloud for the most competed sports and the other for the top ten most medals won countries. Please note that this section counts all individual medals awarded, whereas the official ranking tallies only 1 medal for a team placing in a sport
+
+<br>
+
+```{r}
+library(knitr)
+renderImage(
+  list(src = "Rio-de-Janeiro-Olympic-Games-2016.webp",
+       contentType = 'image/png',
+       width = 300, height = 300,
+       deleteFile=FALSE)
+)
+```
+
+The Athletes {data-orientation=rows}
+======================================
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r, echo=FALSE, warning=FALSE}
+
+world_map <- map_data("world") %>%
+  rename("country"="region")
+
+world_map <- world_map %>%
+  mutate(nationality = countrycode(country, "country.name", "ioc"))
+
+fig_dat_A <- dat %>%
+  select(nationality, country)
+
+temp_dat2 <- dat %>%
+  select(country)
+
+temp_dat2 <- as_tibble(table(temp_dat2)) %>% 
+  rename("Athletes"="n")
+
+fig_dat_A <- fig_dat_A %>%
+  distinct(country, .keep_all = TRUE)
+
+fig_dat_A <- inner_join(temp_dat2,
+                        fig_dat_A,
+                        by="country") %>%
+  arrange(desc(Athletes))
+
+dat2_combined <- left_join(world_map,
+                           fig_dat_A,
+                           by="nationality")
+
+# Plot world map
+gg2 <- ggplot() +
+  geom_polygon(data=dat2_combined,
+               mapping=aes(x=long,
+                           y=lat,
+                           group=group,
+                           text = paste(country.x),
+                           fill= Athletes, colour="gray10")) +
+  scale_fill_distiller(palette=4,
+                       direction=1) +
+  scale_colour_manual(values = c("gray10")) +
+  theme_bw() + 
+  guides(color=FALSE) +
+  coord_map(xlim=c(-180,180)) +
+  labs(title="Global distribution of athletes", x="", y="") +
+  theme(legend.position = c("right"),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),
+        plot.title = element_text(size=16, face="bold"))
+
+ggplotly(gg2,tooltip=c("text", "fill")) %>% 
+  hide_legend()
+
+```
+
+### Chart B
+
+```{r, echo=FALSE}
+
+fig_dat_B <- dat %>% 
+  select(sex) 
+
+fig_dat_B <- as_tibble(table(fig_dat_B)) %>%
+  rename("count"="n") %>%
+  mutate(per=round(count/sum(count) * 100)) %>%
+  arrange(count)
+
+gender<- data.frame(gender=fig_dat_B$sex, value=fig_dat_B$per,
+                    path = c('path://M28.9624207,31.5315864 L24.4142575,16.4793596 C23.5227152,13.8063773 20.8817445,11.7111088 17.0107398,11.7111088 L12.112691,11.7111088 C8.24168636,11.7111088 5.60080331,13.8064652 4.70917331,16.4793596 L0.149791395,31.5315864 C-0.786976655,34.7595013 2.9373074,35.9147532 3.9192135,32.890727 L8.72689855,19.1296485 L9.2799493,19.1296485 C9.2799493,19.1296485 2.95992025,43.7750224 2.70031069,44.6924335 C2.56498417,45.1567684 2.74553639,45.4852068 3.24205501,45.4852068 L8.704461,45.4852068 L8.704461,61.6700801 C8.704461,64.9659872 13.625035,64.9659872 13.625035,61.6700801 L13.625035,45.360657 L15.5097899,45.360657 L15.4984835,61.6700801 C15.4984835,64.9659872 20.4191451,64.9659872 20.4191451,61.6700801 L20.4191451,45.4852068 L25.8814635,45.4852068 C26.3667633,45.4852068 26.5586219,45.1567684 26.4345142,44.6924335 C26.1636859,43.7750224 19.8436568,19.1296485 19.8436568,19.1296485 L20.3966199,19.1296485 L25.2043926,32.890727 C26.1862111,35.9147532 29.9105828,34.7595013 28.9625083,31.5315864 L28.9624207,31.5315864 Z M14.5617154,0 C17.4960397,0 19.8773132,2.3898427 19.8773132,5.33453001 C19.8773132,8.27930527 17.4960397,10.66906 14.5617154,10.66906 C11.6274788,10.66906 9.24611767,8.27930527 9.24611767,5.33453001 C9.24611767,2.3898427 11.6274788,0 14.5617154,0 L14.5617154,0 Z',
+                             'path://M18.2629891,11.7131596 L6.8091608,11.7131596 C1.6685112,11.7131596 0,13.032145 0,18.6237673 L0,34.9928467 C0,38.1719847 4.28388932,38.1719847 4.28388932,34.9928467 L4.65591984,20.0216948 L5.74941883,20.0216948 L5.74941883,61.000787 C5.74941883,65.2508314 11.5891201,65.1268798 11.5891201,61.000787 L11.9611506,37.2137775 L13.1110872,37.2137775 L13.4831177,61.000787 C13.4831177,65.1268798 19.3114787,65.2508314 19.3114787,61.000787 L19.3114787,20.0216948 L20.4162301,20.0216948 L20.7882606,34.9928467 C20.7882606,38.1719847 25.0721499,38.1719847 25.0721499,34.9928467 L25.0721499,18.6237673 C25.0721499,13.032145 23.4038145,11.7131596 18.2629891,11.7131596 M12.5361629,1.11022302e-13 C15.4784742,1.11022302e-13 17.8684539,2.38997966 17.8684539,5.33237894 C17.8684539,8.27469031 15.4784742,10.66467 12.5361629,10.66467 C9.59376358,10.66467 7.20378392,8.27469031 7.20378392,5.33237894 C7.20378392,2.38997966 9.59376358,1.11022302e-13 12.5361629,1.11022302e-13'))
+
+gender %>% 
+  e_charts(gender) %>% 
+  e_x_axis(splitLine=list(show = FALSE), 
+           axisTick=list(show=FALSE),
+           axisLine=list(show=FALSE),
+           axisLabel= list(show=FALSE)) %>%
+  e_y_axis(max=100, 
+           splitLine=list(show = FALSE),
+           axisTick=list(show=FALSE),
+           axisLine=list(show=FALSE),
+           axisLabel=list(show=FALSE)) %>%
+  e_color(color= c("rgba(53, 136, 124, 0.8)", "'#eee'")) %>%
+  e_pictorial(value, symbol = path, z=10, name= 'realValue', 
+              symbolBoundingData= 100, symbolClip= TRUE) %>%
+  e_pictorial(value, symbol = path, name= 'background', 
+              symbolBoundingData= 100) %>% 
+  e_labels(position = "bottom", offset= c(0, 10), 
+           textStyle =list(fontSize= 20, fontFamily= 'Arial', 
+                           fontWeight ='bold', 
+                           color= "rgba(53, 136, 124, 0.8)"),
+           formatter="{@[1]}% {@[0]}") %>%
+  e_legend(show = FALSE) %>%
+  e_title(text="Percentage of athletes by gender", textStyle.align='center') %>%
+  e_theme("vintage") %>%
+  e_toolbox_feature(feature = 'saveAsImage')
+
+```
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+
+### Chart C
+
+```{r, echo=FALSE, warning=FALSE}
+
+fig_dat_C <- dat %>%
+  select(nationality,
+         country,
+         continent,
+         continent_id)
+
+temp_dat1 <- dat %>%
+  select(country)
+
+temp_dat1 <- as_tibble(table(temp_dat1)) %>%
+  rename("number_of_athletes"="n")
+  
+fig_dat_C <- fig_dat_C %>%
+  distinct(country, .keep_all = TRUE)
+
+fig_dat_C <- left_join(temp_dat1,
+                       fig_dat_C,
+                       by="country") %>%
+  arrange(desc(number_of_athletes))
+
+packing <- circleProgressiveLayout(fig_dat_C$number_of_athletes,
+                                   sizetype='area')
+
+fig_dat_C <- add_column(fig_dat_C,
+                        packing)
+
+dat.gg <- circleLayoutVertices(packing,
+                               npoints=100)
+
+continent_id <- rep(fig_dat_C$continent_id,
+                    each=101)
+
+dat.gg <- add_column(dat.gg,
+                     continent_id)
+
+number_of_athletes <- rep(fig_dat_C$number_of_athletes,
+                          each=101)
+dat.gg <- add_column(dat.gg,
+                     number_of_athletes)
+
+country <- rep(fig_dat_C$country,
+               each=101)
+dat.gg <- add_column(dat.gg,
+                     country)
+
+nationality <- rep(fig_dat_C$nationality,
+                   each=101)
+dat.gg <- add_column(dat.gg,
+                     nationality)
+
+if (requireNamespace("ggiraph")) {
+  gg1 <- ggplot(data=dat.gg) + 
+    ggiraph::geom_polygon_interactive(aes(x=x,
+                                          y=y,
+                                          group=id,
+                                          fill=as.factor(continent_id),
+                                          tooltip = c(paste0(country, " Athletes: \n",number_of_athletes)),
+                                          data_id=x)) +
+    scale_fill_manual(labels = c( "Americas",
+                                  "Europe",
+                                  "Asia",
+                                  "Africa",
+                                  "Oceania",
+                                  "Independent"),
+                      values=alpha(c(rgb(145, 100, 106,max=255),
+                                     rgb(163, 212, 172,max=255),
+                                     rgb(140, 141, 191,max=255),
+                                     rgb(144, 204, 209,max=255),
+                                     rgb(224, 151, 49,max=255),
+                                     rgb(191, 189, 138,max=255)),
+                                   0.75)) +
+    geom_text(data=filter(fig_dat_C,
+                          number_of_athletes > 100),
+              aes(x=x, y=y,
+                  size=number_of_athletes,
+                  label=nationality),
+              color="white") +
+    scale_size(range = c(5, 9)) +
+    guides(alpha=FALSE,
+           size=FALSE,
+           color = guide_legend(override.aes = list(alpha = 0.1)),
+           fill=guide_legend(title="Region",override.aes = list(size=10))) +
+    labs(title="Number of athletes by nationality & continent") +
+    theme(legend.position = c("right"),
+        legend.title = element_text(face = "bold",size=20),
+        legend.text = element_text(size = 20),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        plot.background=element_blank(),
+        plot.title = element_text(hjust = 0.5,
+                                  face="bold",
+                                  size=36)) +
+    coord_equal()
+
+ renderGirafe({ggiraph::ggiraph(ggobj = gg1,
+                                width_svg = 20,
+                                height_svg = 10)})
+}
+
+```
+
+### Chart D
+
+```{r, echo=FALSE, warning=FALSE}
+#pie chart of gender, filter by country
+
+fig_dat_D <- dat %>% 
+  select(continent)
+
+fig_dat_D <- as_tibble(table(fig_dat_D)) %>%
+  rename("count"="n") %>%
+  mutate(per=count/sum(count)) %>%
+  arrange(count)
+
+plot_ly(fig_dat_D,
+        labels = ~continent,
+        values = ~per,
+        type = 'pie',
+        textinfo = 'label+percent',
+        insidetextfont = list(size = 24),
+        hoverinfo = 'text',
+        text = ~paste(continent, "athletes:", count),
+        marker = list(colors = c("rgba(191, 189, 138, 1)",
+                                 "rgba(224, 151, 49, 1)",
+                                 "rgba(144, 204, 209, 1)",
+                                 "rgba(140, 141, 191, 1)",
+                                 "rgba(145, 100, 106, 1)",
+                                 "rgba(163, 212, 172, 1)"),
+                      line = list(color = '#000000', width = 2))) %>%
+  
+  layout(title = "<b>Percentage of athletes by continents<b>",
+         font=list(size = 12),
+         legend=list(title=list(text='<b>Continent</b>')))
+
+```
+
+The Medalists {data-orientation=rows}
+======================================
+
+Input Parameters {.sidebar}
+-----------------------------------------------------------------------
+
+### Filter
+
+```{r}
+sidebar_dat1 <- dat %>%
+  filter(total > 0)
+
+selectInput(inputId="my_medal",
+            label="medal",
+            choices=c("total","gold","silver","bronze"),
+            multiple=FALSE,
+            selected="total")
+
+selectInput(inputId="my_nationality",
+            label="nationality",
+            choices=sort(unique(sidebar_dat1$nationality)),
+            multiple=TRUE,
+            selected=unique(sidebar_dat1$nationality))
+
+selectInput(inputId="my_sport",
+            label="sport",
+            choices=sort(unique(sidebar_dat1$sport)),
+            multiple=TRUE,
+            selected=unique(sidebar_dat1$sport))
+
+```
+
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+
+### Chart E
+
+```{r, echo=FALSE}
+
+renderPlotly({
+  fig_dat_E <- dat %>%
+    select(nationality,sport,gold,silver,bronze,total) %>%
+    filter(nationality %in% input$my_nationality) %>%
+    filter(sport %in% input$my_sport) %>%
+    group_by(sport) %>%
+    mutate(count = n())
+  
+  fig_dat_E <- aggregate(cbind(gold,silver,bronze,total) ~ sport,
+                         data = fig_dat_E,
+                         FUN = sum,
+                         na.rm = TRUE) %>%
+    arrange(desc(total)) %>%
+    pivot_longer(cols=c(gold,silver,bronze),
+                 names_to="medal",
+                 values_to="count")
+  
+  fig_dat_E <- fig_dat_E[1:30, ]
+  
+  fig_dat_E$medal <- factor(fig_dat_E$medal,
+                            levels = c("gold", "silver", "bronze"))
+  
+  if(input$my_medal != "total"){
+    fig_dat_E <- fig_dat_E %>%
+      filter(medal == input$my_medal)
+ } 
+
+if(input$my_medal == "gold"){
+  my_fill <- c(alpha("gold"))
+} else if(input$my_medal == "silver"){
+  my_fill <- c(alpha("grey"))
+} else if(input$my_medal == "bronze"){
+  my_fill <- c(alpha(rgb(0.804,0.498,0.196)))
+} else {
+  my_fill <- c(alpha("gold"),alpha("grey"),alpha(rgb(0.804,0.498,0.196)))
+}
+
+gg6 <- ggplot(fig_dat_E,
+              aes(x=reorder(sport,-count),
+                  y=count,
+                  fill= medal,
+                  text = paste(count, medal,"medalists"),
+                  color="gray50")) +
+  geom_bar(stat="identity") +
+  labs(x="Sport", y="Medals",
+       title="<b>Top 10 most awarded sports<b>") +
+  scale_fill_manual(values=my_fill) +
+  scale_colour_manual(values = c("gray50"),
+                      name="") +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(size=.1,
+                                          color="darkgrey"),
+        axis.text.x = element_text(size=6))
+
+ggplotly(gg6, tooltip=c("text")) %>% 
+  hide_legend()
+})
+
+```
+
+Row {data-height=400}
+-----------------------------------------------------------------------
+
+### Chart F
+
+```{r, echo=FALSE}
+
+renderGirafe({
+  fig_dat_F <- dat %>%
+    select(nationality,
+           sport,
+           country,
+           sex,!!as.symbol(input$my_medal)) %>%
+    rename("medal"=input$my_medal) %>%
+    filter(nationality %in% input$my_nationality) %>%
+    filter(sport %in% input$my_sport) %>%
+    group_by(country,sex) %>%
+    mutate(count = n())
+
+fig_dat_F <- aggregate(cbind(medal) ~ country + sex + nationality,
+                      data = fig_dat_F, FUN = sum, na.rm = TRUE) %>%
+  #need to filter to remove zeros for x & y of dat.gg
+  filter(medal >0 ) %>% 
+  arrange(country)
+
+packing <- circleProgressiveLayout(fig_dat_F$medal,
+                                   sizetype='area')
+
+fig_dat_F <- add_column(fig_dat_F,
+                       packing)
+
+dat.gg <- circleLayoutVertices(packing,
+                               npoints=100)
+
+sex <- rep(fig_dat_F$sex,
+           each=101)
+dat.gg <- add_column(dat.gg,
+                     sex)
+
+medal <- rep(fig_dat_F$medal,
+             each=101)
+dat.gg <- add_column(dat.gg,
+                     medal)
+
+country <- rep(fig_dat_F$country,
+               each=101)
+dat.gg <- add_column(dat.gg,
+                     country)
+
+nationality <- rep(fig_dat_F$nationality,
+                   each=101)
+dat.gg <- add_column(dat.gg,
+                     nationality)
+
+max(dat.gg$medal,
+    na.rm = TRUE)
+
+if(max(dat.gg$medal, na.rm = TRUE) <= 5){
+  display_filter <- 0
+} else if(max(dat.gg$medal, na.rm = TRUE) <= 10){
+  display_filter <- 5
+} else if(max(dat.gg$medal, na.rm = TRUE) <= 15){
+  display_filter <- 10
+} else {
+  display_filter <- 15
+}
+
+if (requireNamespace("ggiraph")) {
+  gg4 <- ggplot(data=dat.gg) +
+      ggiraph::geom_polygon_interactive(
+        aes(x=x, y=y,
+            group=id,
+            fill=as.factor(sex),
+            tooltip = c(paste0(country, " ",
+                               sex, " ",
+                               input$my_medal, " Medalists: \n",medal)),
+            data_id=x)) +
+    scale_fill_manual(labels = c("Female",
+                                 "Male"),
+                      values=alpha(c(rgb(163, 212, 172,max=255),
+                                     rgb(140, 141, 191,max=255)),0.75)) +
+    geom_text(data=filter(fig_dat_F,
+                          medal > display_filter),
+              aes(x=x, y=y,
+                  size=medal,
+                  label=nationality),
+              color="white") +
+    scale_size(range = c(5,9)) +
+    guides(alpha=FALSE,
+           size=FALSE,
+           color = guide_legend(override.aes = list(alpha = 0.1)),
+           fill=guide_legend(title="Gender")) +
+    labs(title="Medals by nationality and gender") +
+    theme(legend.position = c("right"),
+          legend.title = element_text(face = "bold",size=22),
+          legend.text = element_text(size = 22),
+          axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          panel.background=element_blank(),
+          panel.border=element_blank(),
+          panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          plot.background=element_blank(),
+          plot.title = element_text(hjust = 0.5,
+                                    size=36,
+                                    face="bold")) + 
+    coord_equal()
+  ggiraph::ggiraph(ggobj = gg4,
+                   width_svg = 16,
+                   height_svg = 10,
+                   width = 1)
+  }
+})
+
+```
+
+### Chart G
+
+```{r, echo=FALSE}
+#height vs weight, medals=size of points, facet gender?
+
+renderPlotly({
+  gg5 <- (fig_dat_G <- dat %>%
+            select(name,
+                   nationality,
+                   country,
+                   sport,
+                   sex,
+                   height,
+                   weight,!!as.symbol(input$my_medal)) %>%
+            rename("medal"=input$my_medal) %>%
+            filter(nationality %in% input$my_nationality) %>%
+            filter(sport %in% input$my_sport) %>%
+            filter(medal > 0) %>%
+            ggplot(aes(x=weight,
+                       y=height,
+                       fill=sex,
+                       size=medal,
+                       text = paste("Name:", name,
+                                    "\nGender:", sex,
+                                    "\nCountry:", country,
+                                    "\nHeight:", height,
+                                    "m\nWeight:", weight,"kg\n",
+                                    input$my_medal, "medals:", medal))) +
+            geom_jitter() + 
+            labs(title="<b> Medalists by height vs. weight and gender <b>",
+                 x="Weight (kg)", y="Height (m)") +
+            scale_fill_manual(values=alpha(c(rgb(163, 212, 172,max=255),
+                                             rgb(140, 141, 191,max=255)),
+                                           0.5),
+                              name="")) +
+    scale_size_continuous(range=c(3,10),
+                          name="") +
+    theme_light() +
+    ylim(1.4,2.2) +
+    xlim(30,160)
+
+ggplotly(gg5,
+         tooltip=c("text")) %>%
+  layout(legend = list(title = list(text = "<b>Gender</b>")))
+})
+  
+```
+
+The Attributes {data-orientation=rows}
+======================================
+
+Input Parameters {.sidebar}
+-----------------------------------------------------------------------
+
+### Filter
+
+```{r}
+
+sidebar_dat2 <- dat %>%
+  filter(total > 0)
+
+selectInput(inputId="my_sex",
+            label="gender",
+            choices=c("female","male"),
+            multiple=TRUE,
+            selected=c("female","male"))
+
+selectInput(inputId="my_sport2",
+            label="sport",
+            choices=sort(unique(sidebar_dat2$sport)),
+            multiple=TRUE,
+            selected=unique(sidebar_dat2$sport))
+
+```
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+
+### Chart H
+
+```{r, echo=FALSE}
+
+renderPlotly({
+  
+fig_dat_H <- dat %>% 
+  select(sex, sport, weight, height, age, total) %>%
+  filter(sex %in% input$my_sex) %>%
+  filter(sport %in% input$my_sport2) %>%
+  rename("weight_kg"="weight") %>% 
+  rename("height_m"="height") %>%
+  rename("age_years"="age")
+
+fig_dat_H <- fig_dat_H %>%
+  pivot_longer(cols=c(weight_kg,
+                      height_m,
+                      age_years),
+               names_to="variable",
+               values_to="metric")
+
+fig_dat_H <- aggregate(total ~ metric + variable,
+                       data = fig_dat_H,
+                       FUN = sum,
+                       na.rm = TRUE) 
+
+fig_dat_H$variable <- factor(fig_dat_H$variable,
+                             levels = c("weight_kg", "height_m", "age_years"))
+
+gg7 <- ggplot(fig_dat_H,
+              aes(x=metric,
+                  y=total,
+                  fill=variable,
+                  color="black",
+                  group=1,
+                  text=paste0(variable, ": ",
+                              metric, "\nmedalists: ", total))) +
+    geom_area() +
+  geom_point(aes(x=metric, y=total)) +
+    labs(title="<b> Distribution of medalists by weight, height, age <b>",x="",y="Medals") +
+    facet_wrap(~variable,scales = "free") +
+    scale_colour_manual(values = c("black"),name="") +
+    scale_fill_manual(values = c(rgb(255,187,120,max=255),
+                                 rgb(152,223,138,max=255),
+                                 rgb(174,199,232,max=255))) +
+  theme_light() + 
+  theme(plot.title = element_text(size=20,face="bold"),
+        strip.text.x = element_text(size = 16, face = "bold"),
+        strip.background = element_rect(color = "black", size = 1))
+
+ggplotly(gg7, tooltip=c("text")) %>% 
+  hide_legend() %>%
+  layout(margin=list(t = 100))
+})
+
+```
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+
+### Chart I
+
+```{r, echo=FALSE}
+
+renderPlotly({
+  fig_dat_I <- dat %>% 
+    select(sex, sport, weight, height, age, total) %>%
+    filter(sex %in% input$my_sex) %>%
+    filter(sport %in% input$my_sport2) %>%
+    filter(total > 0) %>%
+    rename("weight_kg"="weight") %>% 
+    rename("height_m"="height") %>%
+    rename("age_years"="age")
+
+fig_dat_I <- fig_dat_I %>%
+  pivot_longer(cols=c(weight_kg, height_m, age_years),
+               names_to="variable",
+               values_to="metric")
+
+fig_dat_I$variable <- factor(fig_dat_I$variable,
+                             levels = c("weight_kg",
+                                        "height_m",
+                                        "age_years"))
+
+gg8 <- ggplot(fig_dat_I,
+              aes(x=as.factor(variable),
+                  y=metric,
+                  fill=variable)) +
+  geom_boxplot() +
+  facet_wrap(~variable,
+             scales = "free") +
+  labs(title="<b> Spread of medalists by weight, height, age <b>",
+       x="", y="") + 
+  scale_fill_manual(values = c(rgb(255,187,120,max=255),
+                               rgb(152,223,138,max=255),
+                               rgb(174,199,232,max=255))) +
+  theme_light() +
+  theme(axis.text.x=element_blank(),
+        plot.title = element_text(size=20,face="bold"),
+        strip.text.x = element_text(size = 16, face = "bold"),
+        strip.background = element_rect(color = "black", size = 1))
+
+ggplotly(gg8) %>%
+  hide_legend() %>%
+  layout(margin=list(t = 100))
+})
+
+```
+
+Medals and Sport {data-orientation=rows}
+======================================
+
+Row {data-height=500}
+-----------------------------------------------------------------------
+### Chart K
+
+```{r}
+
+fig_dat_K <- dat %>% 
+  select(country, gold, silver, bronze, total)
+
+fig_dat_K <- aggregate(cbind(gold,silver,bronze,total) ~ country,
+                         data = fig_dat_K,
+                         FUN = sum,
+                         na.rm = TRUE)
+
+fig_dat_K <- fig_dat_K[order(fig_dat_K$total,
+                             fig_dat_K$gold,
+                             fig_dat_K$bronze,
+                             decreasing=TRUE),]
+
+fig_dat_K <- fig_dat_K[1:10, ]
+
+fig_dat_K %>% 
+  e_charts(country) %>% 
+  e_pictorial(total,
+              symbol = ea_icons("medal"), 
+              symbolRepeat = TRUE,
+              z = -1,
+              symbolSize = c(15, 15)) %>% 
+  e_theme("vintage") %>%
+  e_title("Top 10 countries by total medals won") %>% 
+  e_flip_coords() %>%
+  # Hide Legend
+  e_legend(show = FALSE) %>%
+  # Remove Gridlines
+  e_x_axis(splitLine=list(show = TRUE)) %>%
+  e_y_axis(splitLine=list(show = TRUE)) %>%
+  # Format Label
+  e_labels(fontSize = 16,
+           fontWeight ='bold',
+           position = "right",
+           offset=c(10, 0))
+
+```
+
+### Chart L
+
+```{r, echo=FALSE}
+#Vector containing only text
+fig_dat_L <- dat$sport
+
+##create a corpus
+olympicsSportCloud<-Corpus(VectorSource(fig_dat_L))
+
+#create document term matrix
+dtm <- TermDocumentMatrix(olympicsSportCloud)
+matrix <- as.matrix(dtm) 
+words <- sort(rowSums(matrix),
+              decreasing=TRUE) 
+Sportcloud_df <- data.frame(word = names(words),
+                            freq=words)
+
+#Generate word cloud
+set.seed(1234) # for reproducibility
+wordcloud(words = Sportcloud_df$word,
+          freq = Sportcloud_df$freq,
+          min.freq = 1,
+          max.words=200,
+          random.order=FALSE,
+          rot.per=0.35,
+          scale = c(3.5, 0.60),
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+Row {}
+-----------------------------------------------------------------------
+
+### Medals Table
+
+```{r}
+
+renderDataTable({
+  
+  fig_dat <- dat %>%
+    select(country, gold, silver, bronze, total)
+  
+  fig_dat <- aggregate(cbind(gold,silver,bronze,total) ~ country,
+                       data = fig_dat,
+                       FUN = sum,
+                       na.rm = TRUE) %>%
+    arrange(desc(total))
+  
+  fig_dat
+  
+})
+
+```
