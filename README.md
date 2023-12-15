@@ -1,4 +1,4 @@
-# 2016年奥林匹克运动会可视化
+![FDCF0F92827C98C4B9237D084348D051](https://github.com/Phuongbui2711/Olympic-2016-Data-Visualization-Dashboard/assets/145199558/dc297faf-e641-479b-a774-c766f67fc4ca)# 2016年奥林匹克运动会可视化
 <p>我们的可视化项目是关于2016年里约奥运会的数据分析，并以此为数据创建了一个灵活的仪表板，使用的语言是R语言，其中使用的函数库为'flexdashboard'和'shiny'，以交互式的方式呈现奥运会运动员的全球分布、奖牌情况、以及运动员的男女占比等信息。</p>
 <p>项目链接：https://phuongbui.shinyapps.io/Rio-Olympics-2016-Dashboard/
   
@@ -55,3 +55,8 @@
 <p>Chart G 旨在展示运动员年龄与其成绩之间的关系，采用散点图的形式。这种图表类型对于查看两个连续变量之间的趋势、相关性以及可能的异常值非常有用。以下是创建 Chart G 的主要步骤：</p>
 <p>数据准备： 从整体运动员数据集中选择与运动员年龄和成绩相关的数据。确保数据中不包含缺失值，以保证图表的准确性。</p>
 <p>创建散点图： 使用 ggplot2 包的函数创建散点图。通过 ggplot 函数设置图表对象，通过 geom_point 函数添加散点图的图层，并通过其他函数设置标题、轴标签等。</p>
+
+
+### 项目展示视频百度网盘链接：
+<p>链接：https://pan.baidu.com/s/1L23yjM7TsyLIEj78jSZ0LA?pwd=qbfl 提取码：qbfl </p>
+
