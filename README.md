@@ -1,4 +1,4 @@
-(https://github.com/Phuongbui2711/Olympic-2016-Data-Visualization-Dashboard/assets/145199558/dc297faf-e641-479b-a774-c766f67fc4ca)# 2016年奥林匹克运动会可视化
+# 2016年奥林匹克运动会可视化
 <p>我们的可视化项目是关于2016年里约奥运会的数据分析，并以此为数据创建了一个灵活的仪表板，使用的语言是R语言，其中使用的函数库为'flexdashboard'和'shiny'，以交互式的方式呈现奥运会运动员的全球分布、奖牌情况、以及运动员的男女占比等信息。</p>
 <p>项目链接：https://phuongbui.shinyapps.io/Rio-Olympics-2016-Dashboard/
   
